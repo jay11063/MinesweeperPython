@@ -6,6 +6,8 @@ import numpy as np
 from random import randint
 import os
 
+
+# Constants
 F = 50
 size = 15,15 # width, height
 WHITE = (255, 251, 233)
@@ -16,69 +18,85 @@ RED = (220, 53, 53)
 
 class Board:
     def __init__(self, start:tuple[int,int], size:tuple[int, int], n_mines=-1):
-        self.start = start
-        self.w, self.h = size
-        self.n = int(self.w*self.h*0.12) if n_mines==-1 else n_mines
+        self.start = start # start position
+        self.w, self.h = size # board size width x height
+        self.n = int(self.w*self.h*0.12) if n_mines==-1 else n_mines # number of mines : 12% of board
+        # board : [[{number, open, flag}, ...], ...]
         self.board = np.array([[{'n':0,'open':0,'flag':False} for _ in range(self.w)] for _ in range(self.h)])
-        self.mines = []
-        self.n_flag = 0
-        self.dxdy = [(1,1),(1,0),(1,-1),(0,1),(0,-1),(-1,1),(-1,0),(-1,-1)]
+        self.mines = [] # mines' position
+        self.n_flag = 0 # number of flags
+        self.dxdy = [(1,1),(1,0),(1,-1),(0,1),(0,-1),(-1,1),(-1,0),(-1,-1)] # around positions
         for _ in range(self.n):
+            # Create mines in random position
             game_start = True
             while game_start:
                 x, y = randint(0,self.w-1), randint(0,self.h-1)
                 if (x,y) in self.mines:
                     continue
                 game_start = False
-                for dx,dy in self.dxdy+[(0,0)]:
-                    if (x+dx,y+dy) == start:
+                for dx,dy in self.dxdy+[(0,0)]: 
+                    if (x+dx,y+dy) == start: # if start position isn't zero (0)
                         game_start = True
             self.mines.append((x,y))
             self.board[y][x]['n'] = 'mine'
             for dx,dy in self.dxdy:
+                # Add numbers around mines
                 if (0 <= x+dx < self.w) and (0 <= y+dy < self.h):
                     if isinstance(self.board[y+dy][x+dx]['n'], int):
                         self.board[y+dy][x+dx]['n'] += 1
+        # print basic info
         print(f'{self.w}x{self.h}\nMines: {self.n}')
-        self.data = []
 
+    # This function opens a tile
     def open(self, pos:tuple[int,int], click=False):
         x,y = pos
-        if self.is_flaged(x,y):
+        if self.is_flag(x,y):
             return -1
+    
         elif self.is_mine(x,y):
+            # Chain explosion
             for mx,my in self.mines:
-                if not self.is_flaged(mx,my):
+                if not self.is_flag(mx,my):
                     self.board[my][mx]['open'] = 1
             return 0
+    
         elif click:
-            if self.is_opened(x,y):
+            if self.is_open(x,y):
+                # if user click an open tile
                 count = 0
                 for dx,dy in self.dxdy:
                     if self.is_in_board(x+dx,y+dy):
-                        if self.is_flaged(x+dx, y+dy):
+                        if self.is_flag(x+dx, y+dy):
                             count += 1
                 if count == self.board[y][x]['n']:
-                    for dx,dy in self.dxdy:
-                        if self.is_in_board(x+dx,y+dy):
-                            self.open((x+dx,y+dy))
-        if not self.is_opened(x,y):
+                    # if number of flags == tile number
+                    self.__recursion(x,y)
+    
+        if not self.is_open(x,y):
             self.board[y][x]['open'] = 1
             if not self.board[y][x]['n']:
-                for dx,dy in self.dxdy:
-                    if self.is_in_board(x+dx,y+dy):
-                        self.open((x+dx,y+dy))
+                # if tile number is zero (0)
+                self.__recursion(x,y)
         return 1
 
+    # This function opens around it by using recursion
+    def __recursion(self, x,y):
+        for dx,dy in self.dxdy:
+            if self.is_in_board(x+dx,y+dy):
+                self.open((x+dx,y+dy))
+
+    # This function puts the flag on a position
     def flag(self, pos:tuple[int,int]):
         x,y = pos
-        if not self.board[y][x]['open']:
-            self.board[y][x]['flag'] = not(self.board[y][x]['flag'])
-            if self.board[y][x]['flag']:
-                self.n_flag += 1
-            else:
-                self.n_flag -= 1
+        if self.is_in_board(x,y):
+            if not self.board[y][x]['open']:
+                self.board[y][x]['flag'] = not(self.board[y][x]['flag'])
+                if self.board[y][x]['flag']:
+                    self.n_flag += 1
+                else:
+                    self.n_flag -= 1
 
+    # This function checks win
     def is_win(self):
         if self.n_flag==self.n:
             for row in self.board:
@@ -89,11 +107,13 @@ class Board:
         else:
             return False
 
+    # This function displays the number on tiles
     def text(self, n, x, y):
         number = font.render(str(n), True, BLACK)
         w,h = number.get_size()
         screen.blit(number, (x*F+(F-w)/2, y*F+(F-h)/2))
 
+    # This Function draws the board
     def draw(self):
         for y, row in enumerate(self.board):
             for x, e in enumerate(row):
@@ -110,24 +130,24 @@ class Board:
                         pygame.draw.polygon(screen, RED, [(x*F+17,y*F+15),(x*F+17,y*F+36),(x*F+36,y*F+25)])
                 pygame.draw.rect(screen, BLACK, (x*F, y*F, F, F), 5)
 
+    # This function checks mine on a position
     def is_mine(self, x, y):
-        return self.board[y][x]['n']=='mine'
+        if self.is_in_board(x,y):
+            return self.board[y][x]['n']=='mine'
 
-    def is_opened(self, x, y):
-        return self.board[y][x]['open']
+    # This function checks the tile is open
+    def is_open(self, x, y):
+        if self.is_in_board(x,y):
+            return self.board[y][x]['open']
     
-    def is_flaged(self, x, y):
-        return self.board[y][x]['flag']
+    # This function checks flag is on a position
+    def is_flag(self, x, y):
+        if self.is_in_board(x,y):
+            return self.board[y][x]['flag']
 
+    # This function checks a position is in the board
     def is_in_board(self, x, y):
         return (0 <= x < self.w) and (0 <= y < self.h)
-
-    def save(self):
-        file_name = os.path.join(current_path, 'data.txt')
-        txt_file = open(file_name, 'a')
-        txt_file.write(self.data+'\n')
-        txt_file.close()
-        print("Save complete.")
 
 class Tiles:
     def __init__(self, w, h, size:tuple[int,int]):
@@ -139,6 +159,7 @@ class Tiles:
             for x in range(self.col):
                 self.tiles.append(pygame.Rect(w*x, h*y, w, h))
 
+    # check position is on any tiles, then return position of a tile
     def check_collide(self, pos):
         for idx, tile in enumerate(self.tiles):
             if tile.collidepoint(pos):
@@ -147,6 +168,7 @@ class Tiles:
         return [-1]
 
 def main():
+    # start at the center of the board
     start = (7,7)
     board = Board(start, size)
     board.draw()
@@ -161,8 +183,10 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+
             elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_RETURN:
+                if event.key == pygame.K_RETURN: # if user presses the return btn
+                    # Reset the game
                     game = True
                     start = (7,7)
                     board = Board(start, size)
@@ -170,22 +194,22 @@ def main():
                     pygame.display.update()
                     pygame.time.wait(300)
                     board.open(start,click=True)
+
             elif event.type == pygame.MOUSEBUTTONUP and game:
                 pos = pygame.mouse.get_pos()
                 collide_pos = tiles.check_collide(pos)
                 if collide_pos[0] != -1:
-                    # Left Click
+                    # Left Click : Open Tile
                     if event.button==1:
                         if not board.open(collide_pos,click=True):
                             game = False
                             print("BOOM")
-                    # Right Click
+                    # Right Click : Put Flag
                     elif event.button==3:
                         board.flag(collide_pos)
                 if board.is_win():
                     game = False
                     print("WIN")
-                    board.save()
 
         board.draw()
 
@@ -194,6 +218,7 @@ def main():
 
 
 if __name__=="__main__":
+    # Initialize
     pygame.init()
     pygame.display.set_caption("Minesweeper")
     fps = pygame.time.Clock()
