@@ -1,4 +1,5 @@
-
+# December 6, 2022
+# Jaeyoon Lee
 
 import pygame
 import numpy as np
